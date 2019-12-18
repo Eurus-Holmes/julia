@@ -117,13 +117,15 @@ export
     Cwstring,
 
 # Exceptions
-    DimensionMismatch,
     CapturedException,
     CompositeException,
+    DimensionMismatch,
     EOFError,
     InvalidStateException,
     KeyError,
     MissingException,
+    ProcessFailedException,
+    TaskFailedException,
     SystemError,
     StringIndexError,
 
@@ -194,6 +196,7 @@ export
 
 # scalar math
     @evalpoly,
+    evalpoly,
     abs,
     abs2,
     acos,
@@ -323,6 +326,7 @@ export
     sin,
     sinc,
     sincos,
+    sincosd,
     sind,
     sinh,
     sinpi,
@@ -365,7 +369,10 @@ export
     cumsum!,
     accumulate,
     accumulate!,
+    eachcol,
     eachindex,
+    eachrow,
+    eachslice,
     extrema,
     fill!,
     fill,
@@ -622,6 +629,7 @@ export
 
     enumerate,  # re-exported from Iterators
     zip,
+    only,
 
 # object identity and equality
     copy,
@@ -642,6 +650,7 @@ export
     islocked,
     istaskdone,
     istaskstarted,
+    istaskfailed,
     lock,
     notify,
     ReentrantLock,
@@ -669,6 +678,8 @@ export
     missing,
     skipmissing,
     something,
+    isnothing,
+    nonmissingtype,
 
 # time
     sleep,
@@ -694,7 +705,10 @@ export
     fieldname,
     fieldnames,
     fieldcount,
+    fieldtypes,
+    hasfield,
     propertynames,
+    hasproperty,
     isabstracttype,
     isbitstype,
     isprimitivetype,
@@ -731,6 +745,7 @@ export
     nameof,
     parentmodule,
     pathof,
+    pkgdir,
     names,
     which,
     @isdefined,
@@ -832,6 +847,7 @@ export
     splitdir,
     splitdrive,
     splitext,
+    splitpath,
 
 # filesystem operations
     cd,

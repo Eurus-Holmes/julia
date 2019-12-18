@@ -484,7 +484,7 @@ function test_primitives(::Type{T}, shape, ::Type{TestAbstractArray}) where T
     @test lastindex(B, 2) == lastindex(A, 2) == last(axes(B, 2))
 
     # first(a)
-    @test first(B) == B[firstindex(B)] == B[1] == A[1] # TODO: use B[begin] once parser transforms it
+    @test first(B) == B[firstindex(B)] == B[begin] == B[1] == A[1] == A[begin]
     @test firstindex(B) == firstindex(A) == first(LinearIndices(B))
     @test firstindex(B, 1) == firstindex(A, 1) == first(axes(B, 1))
     @test firstindex(B, 2) == firstindex(A, 2) == first(axes(B, 2))
@@ -584,11 +584,23 @@ function test_setindex!_internals(::Type{TestAbstractArray})
 end
 
 function test_get(::Type{TestAbstractArray})
-    A = T24Linear([1:24...])
-    B = TSlow([1:24...])
+    A = T24Linear(reshape([1:24...], 4, 3, 2))
+    B = TSlow(reshape([1:24...], 4, 3, 2))
 
-    @test get(A, (), 0) == Int[]
-    @test get(B, (), 0) == TSlow(Int, 0)
+    @test get(A, (), 0) == 0
+    @test get(B, (), 0) == 0
+    @test get(A, (1,), 0) == get(A, 1, 0) == A[1] == 1
+    @test get(B, (1,), 0) == get(B, 1, 0) == B[1] == 1
+    @test get(A, (25,), 0) == get(A, 25, 0) == 0
+    @test get(B, (25,), 0) == get(B, 25, 0) == 0
+    @test get(A, (1,1,1), 0) == A[1,1,1] == 1
+    @test get(B, (1,1,1), 0) == B[1,1,1] == 1
+    @test get(A, (1,1,3), 0) == 0
+    @test get(B, (1,1,3), 0) == 0
+
+    @test get(TSlow([]), (), 0) == 0
+    @test get(TSlow([1]), (), 0) == 1
+    @test get(TSlow(fill(1)), (), 0) == 1
 end
 
 function test_cat(::Type{TestAbstractArray})
@@ -661,6 +673,10 @@ function test_cat(::Type{TestAbstractArray})
 
     @test @inferred(vcat(["a"], "b"))::Vector{String} == ["a", "b"]
     @test @inferred(vcat((1,), (2.0,)))::Vector{Tuple{Real}} == [(1,), (2.0,)]
+
+    # 29172
+    @test_throws ArgumentError cat([1], [2], dims=0)
+    @test_throws ArgumentError cat([1], [2], dims=[5, -3])
 end
 
 function test_ind2sub(::Type{TestAbstractArray})
@@ -848,6 +864,9 @@ for A in (rand(2), rand(2,3))
         @test A[i] == v
     end
     @test Array(values(A)) == A
+
+     @test keytype(A) == keytype(typeof(A)) == eltype(keys(A))
+     @test valtype(A) == valtype(typeof(A)) == eltype(values(A))
 end
 
 # nextind and prevind
@@ -905,10 +924,78 @@ end
         J1, J2 = @inferred(promote(I1, I2))
         @test J1 === J2
     end
+
+    i = CartesianIndex(17,-2)
+    @test CR .+ i === i .+ CR === CartesianIndices((19:21, -1:3))
+    @test CR .- i === CartesianIndices((-15:-13, 3:7))
+    @test collect(i .- CR) == Ref(i) .- collect(CR)
 end
 
 @testset "issue #25770" begin
     @test vcat(1:3, fill(1, (2,1))) == vcat([1:3;], fill(1, (2,1))) == reshape([1,2,3,1,1], 5,1)
     @test hcat(1:2, fill(1, (2,1))) == hcat([1:2;], fill(1, (2,1))) == reshape([1,2,1,1],2,2)
     @test [(1:3) (4:6); fill(1, (3,2))] == reshape([1,2,3,1,1,1,4,5,6,1,1,1], 6,2)
+end
+
+@testset "copy!" begin
+    @testset "AbstractVector" begin
+        s = Vector([1, 2])
+        for a = ([1], UInt[1], [3, 4, 5], UInt[3, 4, 5])
+            @test s === copy!(s, Vector(a)) == Vector(a)
+            @test s === copy!(s, SparseVector(a)) == Vector(a)
+        end
+    end
+    @testset "AbstractArray" begin
+        @test_throws ArgumentError copy!(zeros(2, 3), zeros(3, 2))
+        s = zeros(2, 2)
+        @test s === copy!(s, fill(1, 2, 2)) == fill(1, 2, 2)
+        @test s === copy!(s, fill(1.0, 2, 2)) == fill(1.0, 2, 2)
+    end
+end
+
+@testset "map on Dicts/Sets is forbidden" begin
+    @test_throws ErrorException map(identity, Set([1,2,3]))
+    @test_throws ErrorException map(identity, Dict("a"=>"b"))
+end
+
+@testset "Issue 30145" begin
+    X = [1,2,3]
+    @test isempty(X[Union{}[]])
+end
+
+@testset "Issue 30259" begin
+    A = randn(1,2,3)
+    @test get(A, CartesianIndex(1,2,3), :some_default) === A[1,2,3]
+    @test get(A, CartesianIndex(2,2,3), :some_default) === :some_default
+    @test get(11:15, CartesianIndex(6), nothing) === nothing
+    @test get(11:15, CartesianIndex(5), nothing) === 15
+end
+
+@testset "IndexStyle for various types" begin
+    @test Base.IndexStyle(UpperTriangular) == IndexCartesian() # subtype of AbstractArray, not of Array
+    @test Base.IndexStyle(Vector) == IndexLinear()
+    @test Base.IndexStyle(UnitRange) == IndexLinear()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(UpperTriangular(rand(3, 3)), rand(3, 3), [1; 2; 3]) == IndexCartesian()
+    @test Base.IndexStyle(rand(3, 3), [1; 2; 3]) == IndexLinear()
+end
+
+@testset "promote_shape for Tuples and Dims" begin
+    @test promote_shape((2, 1), (2,)) == (2, 1)
+    @test_throws DimensionMismatch promote_shape((2, 3), (2,))
+    @test promote_shape(Dims((2, 1)), Dims((2,))) == (2, 1)
+    @test_throws DimensionMismatch promote_shape(Dims((2, 2)), Dims((2,)))
+    @test_throws DimensionMismatch promote_shape(Dims((2, 3, 1)), Dims((2,2)))
+end
+
+@testset "getindex and setindex! for Ref" begin
+    for x in [Ref(1), Ref([1,2,3], 1)]
+        @test getindex(x) == getindex(x, CartesianIndex()) == 1
+        x[CartesianIndex()] = 10
+        @test getindex(x) == getindex(x, CartesianIndex()) == 10
+    end
+end
+
+@testset "vcat with mixed elements" begin
+    @test vcat(Nothing[], [missing], [1.0], [Int8(1)]) isa Vector{Union{Missing, Nothing, Float64}}
 end

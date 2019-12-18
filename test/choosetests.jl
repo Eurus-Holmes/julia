@@ -2,8 +2,8 @@
 
 using Random, Sockets
 
-const STDLIB_DIR = joinpath(Sys.BINDIR, "..", "share", "julia", "stdlib", "v$(VERSION.major).$(VERSION.minor)")
-const STDLIBS = filter!(x -> isdir(joinpath(STDLIB_DIR, x)), readdir(STDLIB_DIR))
+const STDLIB_DIR = Sys.STDLIB
+const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 """
 
@@ -40,26 +40,27 @@ function choosetests(choices = [])
         "arrayops", "tuple", "reduce", "reducedim", "abstractarray",
         "intfuncs", "simdloop", "vecelement", "rational",
         "bitarray", "copy", "math", "fastmath", "functional", "iterators",
-        "operators", "path", "ccall", "parse", "loading", "bigint",
-        "bigfloat", "sorting", "spawn", "backtrace",
+        "operators", "path", "ccall", "parse", "loading", "gmp",
+        "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
         "mpfr", "broadcast", "complex",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
-        "euler", "show",
-        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "grisu",
+        "euler", "show", "client",
+        "errorshow", "sets", "goto", "llvmcall", "llvmcall2", "ryu",
         "some", "meta", "stacktraces", "docs",
         "misc", "threads", "stress",
-        "enums", "cmdlineargs", "int",
-        "checked", "bitset", "floatfuncs", "precompile", "inline",
+        "enums", "cmdlineargs", "int", "interpreter",
+        "checked", "bitset", "floatfuncs", "precompile",
         "boundscheck", "error", "ambiguous", "cartesian", "osutils",
-        "channels", "iostream", "secretbuffer", "specificity", "codegen",
-        "reinterpretarray", "syntax", "logging", "missing", "asyncmap"
+        "channels", "iostream", "secretbuffer", "specificity",
+        "reinterpretarray", "syntax", "logging", "missing", "asyncmap", "atexit"
     ]
 
     tests = []
     skip_tests = []
     exit_on_error = false
+    use_revise = false
     seed = rand(RandomDevice(), UInt128)
 
     for (i, t) in enumerate(choices)
@@ -68,6 +69,8 @@ function choosetests(choices = [])
             break
         elseif t == "--exit-on-error"
             exit_on_error = true
+        elseif t == "--revise"
+            use_revise = true
         elseif startswith(t, "--seed=")
             seed = parse(UInt128, t[8:end])
         else
@@ -107,7 +110,8 @@ function choosetests(choices = [])
         prepend!(tests, ["subarray"])
     end
 
-    compilertests = ["compiler/compiler", "compiler/validation"]
+    compilertests = ["compiler/inference", "compiler/validation", "compiler/ssair", "compiler/irpasses",
+                     "compiler/codegen", "compiler/inline", "compiler/contextual"]
 
     if "compiler" in skip_tests
         filter!(x -> (x != "compiler" && !(x in compilertests)), tests)
@@ -182,5 +186,5 @@ function choosetests(choices = [])
     # Filter out tests from the test groups in the stdlibs
     filter!(!in(skip_tests), tests)
 
-    tests, net_on, exit_on_error, seed
+    tests, net_on, exit_on_error, use_revise, seed
 end

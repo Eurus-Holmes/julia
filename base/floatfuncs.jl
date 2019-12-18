@@ -19,11 +19,13 @@ signbit(x::Float16) = signbit(bitcast(Int16, x))
 """
     maxintfloat(T=Float64)
 
-The largest consecutive integer that is exactly represented in the given floating-point type `T`
-(which defaults to `Float64`).
+The largest consecutive integer-valued floating-point number that is exactly represented in
+the given floating-point type `T` (which defaults to `Float64`).
 
-That is, `maxintfloat` returns the smallest positive integer `n` such that `n+1`
-is *not* exactly representable in the type `T`.
+That is, `maxintfloat` returns the smallest positive integer-valued floating-point number
+`n` such that `n+1` is *not* exactly representable in the type `T`.
+
+When an `Integer`-type value is needed, use `Integer(maxintfloat(T))`.
 """
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = Float32(16777216.)
@@ -212,9 +214,8 @@ function round(x::AbstractFloat, ::RoundingMode{:NearestTiesAway})
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::AbstractFloat, ::RoundingMode{:NearestTiesUp})
-    y = floor(x)
-    ifelse(x==y,y,copysign(floor(2*x-y),x))
+function round(x::T, ::RoundingMode{:NearestTiesUp}) where {T <: AbstractFloat}
+    copysign(floor((x + (T(0.25) - eps(T(0.5)))) + (T(0.25) + eps(T(0.5)))), x)
 end
 
 # isapprox: approximate equality of numbers
@@ -230,7 +231,8 @@ the square root of [`eps`](@ref) of the type of `x` or `y`, whichever is bigger 
 This corresponds to requiring equality of about half of the significand digits. Otherwise,
 e.g. for integer arguments or if an `atol > 0` is supplied, `rtol` defaults to zero.
 
-`x` and `y` may also be arrays of numbers, in which case `norm` defaults to `vecnorm` but
+`x` and `y` may also be arrays of numbers, in which case `norm` defaults to the usual
+`norm` function in LinearAlgebra, but
 may be changed by passing a `norm::Function` keyword argument. (For numbers, `norm` is the
 same thing as `abs`.) When `x` and `y` are arrays, if `norm(x-y)` is not finite (i.e. `±Inf`
 or `NaN`), the comparison falls back to checking whether all elements of `x` and `y` are
@@ -311,7 +313,7 @@ fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 # 1.0000000009313226 = 1 + 1/2^30
 # If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
 # instead of the properly-rounded 0.30000000000000004; check after calling fma
-if (Sys.ARCH != :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+if (Sys.ARCH !== :i686 && fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
     (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
      1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
     fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)

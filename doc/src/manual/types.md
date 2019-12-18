@@ -125,7 +125,7 @@ end
 Returning from this function behaves just like an assignment to a variable with a declared type:
 the value is always converted to `Float64`.
 
-## Abstract Types
+## [Abstract Types](@id man-abstract-types)
 
 Abstract types cannot be instantiated, and serve only as nodes in the type graph, thereby describing
 sets of related concrete types: those concrete types which are their descendants. We begin with
@@ -232,7 +232,7 @@ has full control over whether the default or more specific method is used.
 An important point to note is that there is no loss in performance if the programmer relies on
 a function whose arguments are abstract types, because it is recompiled for each tuple of argument
 concrete types with which it is invoked. (There may be a performance issue, however, in the case
-of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-tips).)
+of function arguments that are containers of abstract types; see [Performance Tips](@ref man-performance-abstract-container).)
 
 ## Primitive Types
 
@@ -344,7 +344,7 @@ must be convertible to `Int`:
 
 ```jldoctest footype
 julia> Foo((), 23.5, 1)
-ERROR: InexactError: Int64(Int64, 23.5)
+ERROR: InexactError: Int64(23.5)
 Stacktrace:
 [...]
 ```
@@ -938,7 +938,7 @@ julia> NamedTuple{(:a, :b)}((1,""))
 If field types are specified, the arguments are converted. Otherwise the types of the arguments
 are used directly.
 
-#### [Singleton Types](@id man-singleton-types)
+### [Singleton Types](@id man-singleton-types)
 
 There is a special kind of abstract parametric type that must be mentioned here: singleton types.
 For each type, `T`, the "singleton type" `Type{T}` is an abstract type whose only instance is
@@ -1123,9 +1123,9 @@ Of course, this depends on what `Int` is aliased to -- but that is predefined to
 type -- either [`Int32`](@ref) or [`Int64`](@ref).
 
 (Note that unlike `Int`, `Float` does not exist as a type alias for a specific sized
-[`AbstractFloat`](@ref). Unlike with integer registers, the floating point register sizes
-are specified by the IEEE-754 standard. Whereas the size of `Int` reflects the size of a
-native pointer on that machine.)
+[`AbstractFloat`](@ref). Unlike with integer registers, where the size of `Int`
+reflects the size of a native pointer on that machine, the floating point register sizes
+are specified by the IEEE-754 standard.)
 
 ## Operations on Types
 
@@ -1150,9 +1150,6 @@ what their types are:
 
 ```jldoctest
 julia> typeof(Rational{Int})
-DataType
-
-julia> typeof(Union{Real,Float64,Rational})
 DataType
 
 julia> typeof(Union{Real,String})
@@ -1411,6 +1408,6 @@ a *type*, i.e., use `foo(Val(:bar))` rather than `foo(Val{:bar})`.
 It's worth noting that it's extremely easy to mis-use parametric "value" types, including `Val`;
 in unfavorable cases, you can easily end up making the performance of your code much *worse*.
  In particular, you would never want to write actual code as illustrated above.  For more information
-about the proper (and improper) uses of `Val`, please read the more extensive discussion in [the performance tips](@ref man-performance-tips).
+about the proper (and improper) uses of `Val`, please read [the more extensive discussion in the performance tips](@ref man-performance-value-type).
 
 [^1]: "Small" is defined by the `MAX_UNION_SPLITTING` constant, which is currently set to 4.

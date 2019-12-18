@@ -485,17 +485,25 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test sort!(randperm(10)) == sort!(shuffle(1:10)) == 1:10
     @test randperm(mta,big(10)) == randperm(mtb,big(10)) # cf. #16376
     @test randperm(0) == []
-    @test eltype(randperm(UInt(1))) === Int
-    @test_throws ErrorException randperm(-1)
+    @test_throws ArgumentError randperm(-1)
+
+    let p = randperm(UInt16(12))
+        @test typeof(p) ≡ Vector{UInt16}
+        @test sort!(p) == 1:12
+    end
 
     A, B = Vector{Int}(undef, 10), Vector{Int}(undef, 10)
     @test randperm!(mta, A) == randperm!(mtb, B)
     @test randperm!(A) === A
 
     @test randcycle(mta,10) == randcycle(mtb,10)
-    @test eltype(randcycle(UInt(1))) === Int
     @test randcycle!(mta, A) == randcycle!(mtb, B)
     @test randcycle!(A) === A
+
+    let p = randcycle(UInt16(10))
+        @test typeof(p) ≡ Vector{UInt16}
+        @test sort!(p) == 1:10
+    end
 
     @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
     @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
@@ -593,7 +601,7 @@ end
 
 # Random.seed!(rng, ...) returns rng (#21248)
 guardseed() do
-    g = Random.GLOBAL_RNG
+    g = Random.default_rng()
     m = MersenneTwister(0)
     @test Random.seed!() === g
     @test Random.seed!(rand(UInt)) === g
@@ -685,4 +693,88 @@ end
     @test Random.gentype(Random.UInt52()) == UInt64
     @test Random.gentype(Random.UInt52(UInt128)) == UInt128
     @test Random.gentype(Random.UInt104()) == UInt128
+end
+
+@testset "shuffle[!]" begin
+    a = []
+    @test shuffle(a) == a # issue #28727
+    @test shuffle!(a) === a
+    a = rand(Int, 1)
+    @test shuffle(a) == a
+end
+
+@testset "rand(::Tuple)" begin
+    for x in (0x1, 1)
+        @test rand((x,)) == 0x1
+        @test rand((x, 2)) ∈ 1:2
+        @test rand((x, 2, 3)) ∈ 1:3
+        @test rand((x, 2, 3, 4)) ∈ 1:4
+        @test rand((x, 2, 3, 4, 5)) ∈ 1:5
+        @test rand((x, 2, 3, 4, 6)) ∈ 1:6
+    end
+end
+
+@testset "GLOBAL_RNG" begin
+    local GLOBAL_RNG = Random.GLOBAL_RNG
+    local LOCAL_RNG = Random.default_rng()
+    @test VERSION < v"2" # deprecate this in v2
+
+    @test Random.seed!(GLOBAL_RNG, nothing) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG, UInt32[0]) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG, 0) === LOCAL_RNG
+    @test Random.seed!(GLOBAL_RNG) === LOCAL_RNG
+
+    mt = MersenneTwister(1)
+    @test copy!(mt, GLOBAL_RNG) === mt
+    @test mt == LOCAL_RNG
+    Random.seed!(mt, 2)
+    @test mt != LOCAL_RNG
+    @test copy!(GLOBAL_RNG, mt) === LOCAL_RNG
+    @test mt == LOCAL_RNG
+    mt2 = copy(GLOBAL_RNG)
+    @test mt2 isa typeof(LOCAL_RNG)
+    @test mt2 !== LOCAL_RNG
+    @test mt2 == LOCAL_RNG
+
+    for T in (Random.UInt52Raw{UInt64},
+              Random.UInt2x52Raw{UInt128},
+              Random.UInt104Raw{UInt128},
+              Random.CloseOpen12_64)
+        x = Random.SamplerTrivial(T())
+        @test rand(GLOBAL_RNG, x) === rand(mt, x)
+    end
+    for T in (Int64, UInt64, Int128, UInt128, Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)
+        x = Random.SamplerType{T}()
+        @test rand(GLOBAL_RNG, x) === rand(mt, x)
+    end
+
+    A = fill(0.0, 100, 100)
+    B = fill(1.0, 100, 100)
+    vA = view(A, :, :)
+    vB = view(B, :, :)
+    I1 = Random.SamplerTrivial(Random.CloseOpen01{Float64}())
+    I2 = Random.SamplerTrivial(Random.CloseOpen12{Float64}())
+    @test rand!(GLOBAL_RNG, A, I1) === A == rand!(mt, B, I1) === B
+    B = fill!(B, 1.0)
+    @test rand!(GLOBAL_RNG, vA, I1) === vA
+    rand!(mt, vB, I1)
+    @test A == B
+    for T in (Float16, Float32)
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, I2) === A == rand!(mt, B, I2) === B
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, I1) === A == rand!(mt, B, I1) === B
+    end
+    for T in Base.BitInteger_types
+        x = Random.SamplerType{T}()
+        B = fill!(B, 1.0)
+        @test rand!(GLOBAL_RNG, A, x) === A == rand!(mt, B, x) === B
+    end
+    # issue #33170
+    @test Sampler(GLOBAL_RNG, 2:4, Val(1)) isa SamplerRangeFast
+    @test Sampler(GLOBAL_RNG, 2:4, Val(Inf)) isa SamplerRangeFast
+end
+
+@testset "RNGs broadcast as scalars: T" for T in (MersenneTwister, RandomDevice)
+    @test length.(rand.(T(), 1:3)) == 1:3
 end
